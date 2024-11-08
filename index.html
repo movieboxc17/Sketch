@@ -31,6 +31,7 @@
             display: flex;
             gap: 10px;
             margin: 10px 0;
+            flex-wrap: wrap;
         }
         #controls label {
             margin-right: 5px;
@@ -56,7 +57,10 @@
         <input type="color" id="colorPicker" value="#ffffff">
         <label for="penSize">Pen Size:</label>
         <input type="range" id="penSize" min="1" max="20" value="3">
+        <button onclick="undo()">Undo</button>
+        <button onclick="redo()">Redo</button>
         <button onclick="clearCanvas()">Clear</button>
+        <button onclick="saveImage()">Save as Image</button>
     </div>
     <div id="sketch-container">
         <canvas id="canvas" width="800" height="600"></canvas>
@@ -66,32 +70,35 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         let drawing = false;
+        let paths = [];
+        let undonePaths = [];
 
-        // Mouse events for drawing
-        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousedown', (e) => startDrawing(e));
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseleave', stopDrawing);
 
-        // Touch events for drawing on iPad and mobile
         canvas.addEventListener('touchstart', (e) => startDrawing(e.touches[0]));
         canvas.addEventListener('touchend', stopDrawing);
         canvas.addEventListener('touchmove', (e) => draw(e.touches[0]));
 
         function startDrawing(e) {
             drawing = true;
-            draw(e);  // Begin the line on touch start or mouse down
+            ctx.beginPath();
+            undonePaths = [];
+            draw(e);  // Begin line
         }
 
         function stopDrawing() {
-            drawing = false;
-            ctx.beginPath();  // Stop the line
+            if (drawing) {
+                drawing = false;
+                paths.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); // Save current state for undo
+            }
         }
 
         function draw(e) {
             if (!drawing) return;
 
-            // Adjust for touch offset
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -108,9 +115,34 @@
 
         function clearCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            paths = [];
+            undonePaths = [];
         }
 
-        // Prevent scrolling when touching the canvas
+        function undo() {
+            if (paths.length > 0) {
+                undonePaths.push(paths.pop());
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (paths.length > 0) {
+                    ctx.putImageData(paths[paths.length - 1], 0, 0);
+                }
+            }
+        }
+
+        function redo() {
+            if (undonePaths.length > 0) {
+                paths.push(undonePaths.pop());
+                ctx.putImageData(paths[paths.length - 1], 0, 0);
+            }
+        }
+
+        function saveImage() {
+            const link = document.createElement('a');
+            link.download = 'rocket_sketch.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
         document.body.addEventListener('touchstart', (e) => {
             if (e.target === canvas) e.preventDefault();
         }, { passive: false });
