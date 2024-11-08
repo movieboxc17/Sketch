@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rocket Sketch Pad</title>
+    <title>Advanced Rocket Sketch Pad</title>
     <style>
         body {
             display: flex;
@@ -28,6 +28,7 @@
         }
         #canvas {
             background-color: #1e1e1e;
+            touch-action: none;
         }
         #controls {
             display: flex;
@@ -53,12 +54,16 @@
     </style>
 </head>
 <body onload="resizeCanvas()">
-    <h1>Rocket Sketch Pad</h1>
+    <h1>Advanced Rocket Sketch Pad</h1>
     <div id="controls">
         <label for="colorPicker">Color:</label>
         <input type="color" id="colorPicker" value="#ffffff">
         <label for="penSize">Pen Size:</label>
         <input type="range" id="penSize" min="1" max="20" value="3">
+        <button onclick="setTool('pen')">Pen</button>
+        <button onclick="setTool('eraser')">Eraser</button>
+        <button onclick="setTool('rectangle')">Rectangle</button>
+        <button onclick="setTool('circle')">Circle</button>
         <button onclick="toggleFullscreen()">Full Screen</button>
         <button onclick="undo()">Undo</button>
         <button onclick="redo()">Redo</button>
@@ -75,8 +80,12 @@
         let drawing = false;
         let paths = [];
         let undonePaths = [];
+        let currentTool = 'pen';
+        let zoomScale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
 
-        // Adjust canvas size based on screen
+        // Resize canvas for iPad
         function resizeCanvas() {
             canvas.width = window.innerWidth * 0.95;
             canvas.height = window.innerHeight * 0.75;
@@ -88,7 +97,6 @@
         canvas.addEventListener('mousedown', (e) => startDrawing(e));
         canvas.addEventListener('mouseup', stopDrawing);
         canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseleave', stopDrawing);
 
         canvas.addEventListener('touchstart', (e) => startDrawing(e.touches[0]));
         canvas.addEventListener('touchend', stopDrawing);
@@ -98,13 +106,13 @@
             drawing = true;
             ctx.beginPath();
             undonePaths = [];
-            draw(e);  // Begin line
+            draw(e); // Initial draw to start line
         }
 
         function stopDrawing() {
             if (drawing) {
                 drawing = false;
-                paths.push(ctx.getImageData(0, 0, canvas.width, canvas.height)); // Save current state for undo
+                paths.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
             }
         }
 
@@ -112,17 +120,29 @@
             if (!drawing) return;
 
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
+            const x = (e.clientX - rect.left) / zoomScale - offsetX;
+            const y = (e.clientY - rect.top) / zoomScale - offsetY;
             const penSize = document.getElementById('penSize').value;
-            ctx.lineWidth = e.force ? penSize * e.force : penSize;
-            ctx.strokeStyle = document.getElementById('colorPicker').value;
+            const color = document.getElementById('colorPicker').value;
 
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x, y);
+            ctx.lineWidth = e.force ? penSize * e.force : penSize;
+            ctx.strokeStyle = color;
+
+            if (currentTool === 'pen') {
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            } else if (currentTool === 'eraser') {
+                ctx.clearRect(x - penSize / 2, y - penSize / 2, penSize, penSize);
+            }
+            // Add logic for other tools as needed
+        }
+
+        function setTool(tool) {
+            currentTool = tool;
+            if (tool === 'eraser') ctx.globalCompositeOperation = 'destination-out';
+            else ctx.globalCompositeOperation = 'source-over';
         }
 
         function clearCanvas() {
@@ -165,14 +185,29 @@
             }
         }
 
-        // Prevent scrolling when touching the canvas
-        document.body.addEventListener('touchstart', (e) => {
-            if (e.target === canvas) e.preventDefault();
-        }, { passive: false });
+        // Zoom and Pan functionality
+        let isPanning = false, startX, startY;
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            zoomScale += e.deltaY * -0.01;
+            zoomScale = Math.min(Math.max(.125, zoomScale), 4);
+            ctx.scale(zoomScale, zoomScale);
+        });
 
-        document.body.addEventListener('touchmove', (e) => {
-            if (e.target === canvas) e.preventDefault();
-        }, { passive: false });
+        canvas.addEventListener('mousedown', (e) => {
+            isPanning = true;
+            startX = e.clientX - offsetX;
+            startY = e.clientY - offsetY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            offsetX = e.clientX - startX;
+            offsetY = e.clientY - startY;
+            ctx.setTransform(zoomScale, 0, 0, zoomScale, offsetX, offsetY);
+        });
+
+        canvas.addEventListener('mouseup', () => isPanning = false);
     </script>
 </body>
 </html>
